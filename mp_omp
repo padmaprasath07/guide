@@ -1,0 +1,453 @@
+import pypandoc
+
+content = r"""# Experiment 10: MPI (Python) + OpenMP (C) Practical Guide
+
+This guide gives you the terminal commands, common templates, compile/run commands, and a workflow for solving a new question. It follows the experiment topics in your lab manual. The MPI examples use Python with `mpi4py`; the OpenMP examples here use C as requested.
+
+---
+
+# PART A — ONE-TIME UBUNTU SETUP
+
+Open Ubuntu in VirtualBox. Press **Ctrl + Alt + T** to open Terminal.
+
+Run each command separately:
+
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip mpich libmpich-dev gcc
+```
+
+Create a work folder:
+
+```bash
+mkdir -p ~/parallel-lab
+cd ~/parallel-lab
+```
+
+Set up Python MPI support:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install mpi4py
+```
+
+Check tools:
+
+```bash
+python --version
+mpirun --version
+gcc --version
+python -c "from mpi4py import MPI; print(MPI.Get_library_version())"
+```
+
+If the last command works, Python can access the MPI library.
+
+**When you open a new Ubuntu terminal**, run these commands before running MPI Python programs:
+
+```bash
+cd ~/parallel-lab
+source .venv/bin/activate
+```
+
+---
+
+# PART B — COMMON COMMANDS
+
+| Task | Command |
+|---|---|
+| Enter work folder | `cd ~/parallel-lab` |
+| List files | `ls` |
+| Display a file | `cat filename.py` or `cat filename.c` |
+| Create/edit MPI Python file | `nano program.py` |
+| Create/edit OpenMP C file | `nano program.c` |
+| Save in Nano | `Ctrl+O`, then `Enter` |
+| Exit Nano | `Ctrl+X` |
+| Run MPI with 2 processes | `mpirun -np 2 python program.py` |
+| Run MPI with 4 processes | `mpirun -np 4 python program.py` |
+| Compile OpenMP C | `gcc -fopenmp program.c -o program` |
+| Run compiled C program | `./program` |
+
+The `nano` command opens an editor. Paste/type code there; do not type C or Python source lines directly at the normal shell prompt.
+
+---
+
+# PART C — MPI IN PYTHON
+
+## C1. Common MPI template
+
+Create the file:
+
+```bash
+nano mpi_template.py
+```
+
+Paste this template and change the work/calculation to match the question:
+
+```python
+from mpi4py import MPI
+
+# Group of processes participating in this run
+comm = MPI.COMM_WORLD
+
+# This process's unique ID: 0, 1, 2, ...
+rank = comm.Get_rank()
+
+# Total number of processes
+size = comm.Get_size()
+
+# TODO: Put the calculation/work from the question here.
+# Example:
+# number = rank + 1
+# result = number * number
+
+# TODO: Print the result required by the question.
+print(f"Process {rank} out of {size}")
+```
+
+Save with **Ctrl+O**, press **Enter**, then **Ctrl+X**.
+
+Run:
+
+```bash
+mpirun -np 2 python mpi_template.py
+```
+
+To request three processes:
+
+```bash
+mpirun -np 3 python mpi_template.py
+```
+
+If MPICH reports that there are not enough slots, check the exact error first. `--oversubscribe` is an Open MPI option and may not be supported by MPICH.
+
+## C2. MPI worked example: square a different number per process
+
+Create:
+
+```bash
+nano mpi_square.py
+```
+
+Code:
+
+```python
+from mpi4py import MPI
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+number = rank + 2
+square = number * number
+
+print(f"Process {rank}/{size}: square of {number} = {square}")
+```
+
+Run:
+
+```bash
+mpirun -np 3 python mpi_square.py
+```
+
+Each process independently calculates a square. Output order can vary. This example does not demonstrate data exchange; it demonstrates multiple processes running the same program with different ranks.
+
+## C3. MPI problem-solving checklist
+
+1. Decide how many processes to request with `-np`.
+2. Use `comm.Get_rank()` when each process needs a unique ID.
+3. Decide which data/calculation belongs to each process.
+4. Use `print()` to display results.
+5. If the question requires processes to send/receive data or combine partial results, use MPI communication or collective operations; `rank` alone does not communicate data.
+
+Useful concepts:
+- `MPI.COMM_WORLD`: communicator containing processes in the current run.
+- `comm.Get_rank()`: current process rank.
+- `comm.Get_size()`: total processes.
+- `comm.send()` / `comm.recv()`: point-to-point Python MPI communication.
+- `comm.reduce(...)`: combine values from processes using a reduction operation.
+
+---
+
+# PART D — OPENMP IN C
+
+## D1. Common OpenMP C template
+
+Create:
+
+```bash
+nano omp_template.c
+```
+
+Paste:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    omp_set_num_threads(4);
+
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        int total_threads = omp_get_num_threads();
+
+        /* TODO: Put the parallel work from the question here. */
+
+        printf("Hello from thread %d out of %d threads\n",
+               thread_id, total_threads);
+    }
+
+    return 0;
+}
+```
+
+Save with **Ctrl+O**, press **Enter**, then **Ctrl+X**.
+
+Compile and run:
+
+```bash
+gcc -fopenmp omp_template.c -o omp_template
+./omp_template
+```
+
+The output order can vary. Four threads are requested, but actual runtime behavior can depend on the environment.
+
+## D2. OpenMP Hello World
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    #pragma omp parallel
+    {
+        printf("Hello from thread %d\n", omp_get_thread_num());
+    }
+    return 0;
+}
+```
+
+Save as `hello.c`, then:
+
+```bash
+gcc -fopenmp hello.c -o hello
+./hello
+```
+
+## D3. OpenMP reduction: sum 1 to 10
+
+Save as `reduction.c`:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    int sum = 0;
+
+    #pragma omp parallel for reduction(+:sum)
+    for (int i = 1; i <= 10; i++) {
+        sum += i;
+    }
+
+    printf("Sum = %d\n", sum);
+    return 0;
+}
+```
+
+Compile and run:
+
+```bash
+gcc -fopenmp reduction.c -o reduction
+./reduction
+```
+
+Expected result: `Sum = 55`.
+
+## D4. OpenMP private
+
+Save as `private.c`:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    int x = 10;
+
+    #pragma omp parallel private(x)
+    {
+        x = omp_get_thread_num();
+        printf("Thread %d: x = %d\n", omp_get_thread_num(), x);
+    }
+
+    printf("Original x = %d\n", x);
+    return 0;
+}
+```
+
+Compile and run:
+
+```bash
+gcc -fopenmp private.c -o private
+./private
+```
+
+Each thread gets its own initially uninitialized copy of `x`. We assign to that copy before reading it. The original `x` remains 10.
+
+## D5. OpenMP firstprivate
+
+Save as `firstprivate.c`:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    int x = 10;
+
+    #pragma omp parallel firstprivate(x)
+    {
+        x += omp_get_thread_num();
+        printf("Thread %d: x = %d\n", omp_get_thread_num(), x);
+    }
+
+    printf("Original x = %d\n", x);
+    return 0;
+}
+```
+
+Compile and run:
+
+```bash
+gcc -fopenmp firstprivate.c -o firstprivate
+./firstprivate
+```
+
+Each thread's private copy starts at 10; the original remains 10.
+
+## D6. OpenMP lastprivate
+
+Save as `lastprivate.c`:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    int x = -1;
+
+    #pragma omp parallel for lastprivate(x)
+    for (int i = 0; i < 4; i++) {
+        x = i;
+        printf("Iteration %d, thread %d\n", i, omp_get_thread_num());
+    }
+
+    printf("Final x = %d\n", x);
+    return 0;
+}
+```
+
+Compile and run:
+
+```bash
+gcc -fopenmp lastprivate.c -o lastprivate
+./lastprivate
+```
+
+Expected final line: `Final x = 3`. The printed iteration order can vary.
+
+## D7. OpenMP critical
+
+Save as `critical.c`:
+
+```c
+#include <stdio.h>
+#include <omp.h>
+
+int main(void) {
+    int sum = 0;
+
+    #pragma omp parallel for
+    for (int i = 1; i <= 1000; i++) {
+        #pragma omp critical
+        {
+            sum += i;
+        }
+    }
+
+    printf("Total sum = %d\n", sum);
+    return 0;
+}
+```
+
+Compile and run:
+
+```bash
+gcc -fopenmp critical.c -o critical
+./critical
+```
+
+Expected result: `Total sum = 500500`.
+
+`critical` allows one thread at a time into the protected block. For a simple sum, `reduction(+:sum)` is often more efficient.
+
+---
+
+# PART E — HOW TO SOLVE A NEW QUESTION
+
+When the instructor gives a question:
+
+1. **Identify the topic.** MPI (Python) or OpenMP (C)?
+2. **Identify the goal.** Print IDs, sum a loop, use private variables, preserve the last iteration's value, or protect a shared update?
+3. **Create a source file** with the appropriate extension (`.py` or `.c`).
+4. **Start from the matching template.**
+5. **Change the work, variables, loop limits, and directive** to fit the exact question.
+6. **Save the file.**
+7. **Run the matching command** shown in this guide.
+8. **Check the expected result** and explain why the directive/function is needed.
+
+Don't memorize only the output. Understand what each directive does.
+
+---
+
+# PART F — ONLINE TOOLS IN UBUNTU
+
+Open Firefox inside Ubuntu and use:
+- Python syntax practice: https://onecompiler.com/python
+- C syntax practice: https://www.onlinegdb.com/online_c_compiler
+
+Workflow:
+1. Open Firefox in Ubuntu.
+2. Open the online editor.
+3. Paste a small ordinary Python or C program.
+4. Click **Run** and inspect the output.
+5. Keep the final source code in `~/parallel-lab`.
+
+**Limitation:** Standard online compilers may not support `mpi4py` with multiple MPI processes or GCC's `-fopenmp` option. Use your Ubuntu terminal for the actual MPI/OpenMP experiment.
+
+---
+
+# Final quick reference
+
+MPI:
+```bash
+nano program.py
+mpirun -np 2 python program.py
+```
+
+OpenMP C:
+```bash
+nano program.c
+gcc -fopenmp program.c -o program
+./program
+```
+
+Remember: the editor command creates/opens the source file. The compile command builds the C program. The run command executes it. MPI is launched with `mpirun`.
+"""
+
+out = "/mnt/data/Experiment10_MPI_OpenMP_C_and_Python_Steps.txt"
+pypandoc.convert_text(content, "plain", format="md", outputfile=out, extra_args=["--standalone"])
+print(f"Created: {out}")

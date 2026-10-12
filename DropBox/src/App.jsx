@@ -1,126 +1,41 @@
-import { useState } from "react";
+import {useState} from "react"
+import {Dropbox} from "dropbox"
+  
 
-const TOKEN = "paste your key from setting generate key";
-
-function App() {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [downloadFileName, setDownloadFileName] = useState("");
-
-  const handleFileChange = (e) => {
-    setSelectedFile(e.target.files[0]);
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      setStatusMessage("Error: Please select a file to upload.");
-      return;
-    }
-
-    setStatusMessage("Uploading file, please wait...");
-    try {
-      const response = await fetch(
-        "https://content.dropboxapi.com/2/files/upload",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${TOKEN}`,
-            "Dropbox-API-Arg": JSON.stringify({
-              path: "/" + selectedFile.name,
-              mode: "overwrite",
-              autorename: true,
-              mute: false,
-              strict_conflict: false,
-            }),
-            "Content-Type": "application/octet-stream",
-          },
-          body: selectedFile,
+const dbx=new Dropbox({ 
+  accessToken:"sl.u.AGw72_bSHHKwEeaN_YmGg1d3GVD8L5r2so-99ezTuBJSsvQCanQEbyyhSTIuTaLc7UATtoHrPrSfJxUoxw0BP11dPLK4uOkHHTjFrFMfykANSoMlfCo2DVHQXaZNNpvdLD93OAhEHZW0o29X_d0orNCcFqAgDeeVNsMvgJ6OZCAXbjEF0OpBwo0iCGPJv9evGwLsXEut6qWc7guxajdHt4V_Af-rRWfTJDFVHGhh6gma8m9PHTAdkabt933xA-rptoiIqstApiu2kuFuQrwXNIcuawGGFKrMA6xPEiYF8iP5l8Q06Ftl04c1n2VqkVtLmA14KPGIZGPeYBcUUd-xQeESzpdsHmu4MuzTMWmFln-PQ9qMr1BXPOyowKGOry3C4SsGJNOmEXbEuPY0JfC5kGF6NlQSkCQrbMG9WGAS3H5OSgnigE8qfQkUK4K-kXqy7gP4FAqoTTrRPyMDmfNDsfDqCsCLoO0gQCkhyHIIOG_26oo0LyNt7mdBSWM5VfKUcT33FHuda7zLQNscl6U_gnlhe1TMkB-MzQGsjTX5Jg7UMSeZByrkIIfmfxjqXhByhDJqGoyv3piXsJaJ4SeiiMRzy2iq0miWyVoFLUZtasOgRYSyp73tAmuCnl6zAGI90SjjQtkZlXco6MQ6Cmj8pc3YQ_2zzjcbCnOAT1CE_N7vSeHrVnWrz_saKA6xWFi0Vueca-2eSPQgK6ZkvmTRjbxiXCGpbbBVBbiki5zN-_bMG3-WYJlyuIuqVzLMipOvVG4tqD0NyJWMjQx5dvjTqm_VfG1NXkn9dy36gbmre0vW7g5drsscQRCyTHzjyrcyC45ZPBbWkat3diknUZZ4MK4WuFO_eurfq9-Wh7kaKmp7i2CaS7-UJgsnKVF-cVrJjHEeIeh6bRk-F_rTeGIyJAfe8YppIbaGC422_D4-NeUdtqPB14otRgtkW1YAbuX1ULQs-vSIuD-d3V1_ogHL9Ps-r5dkvm4z1yBL_K-RYo9XV-K-CjuBUWDrlLxg9mN2wo00KaHmsSPibBsa62CgNotJ1lO-xTfkzdtPrzQF9woQd4a20DKI3lRRh5lfEg_I5j2eTjU3DIpJHAEqcaxhzjVwl3kjogHiFX4Io9hKOqu1ZZEZ83qwnXot7h2yqJDRPsBQwIl3ZkBKwZneV4fg5sy3HB9UEmZA5hsbSynU1wkEIOgFmOQ_s-U_e8H33DP4-uNBCyZE1LcHFpvFbhnA5VjCuZX4Ks1rLaRgTWCvH8ITXlfWCsAEaDRGtqZBFztZIKdiLWCf8G9kRva8WTTrFZh8LH5Hf0lfxq3-viOz8Ifhmq75_m1VbLYvSGL_dBzWE1xFYid6RWrGO1HHEpYCDSd9914oiXFfMXdJlLGqBdp_NY9ZOYgQe7-ig3BWrHTMTavyqsRazbtbEArSLTqMN0HGLBzFNICn1Ce-dfH7r49PQA"
+})
+export default function App(){ 
+  const[msg,setMsg]=useState("");
+const[file,setfile]=useState(null);
+  async function upload(){ 
+    if(!file)return "file not found"
+    try{ 
+      await dbx.filesUpload({ 
+        path:"/"+file.name,
+        contents:file,
+        mode:{ 
+          ".tag":"overwrite"
         }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatusMessage("Upload successful: " + data.name);
-      } else {
-        setStatusMessage("Upload failed: " + (data.error_summary || JSON.stringify(data)));
-      }
-    } catch (error) {
-      setStatusMessage("Error: " + error.message);
+      });
+      setMsg("file uploaded");
     }
-  };
+    catch(e){ 
+         console.log("Full error:", e);
+  console.log("Error details:", e.error);
 
-  const handleDownload = async () => {
-    if (!downloadFileName.trim()) {
-      setStatusMessage("Error: Please enter a file name to download.");
-      return;
+  setMsg(
+    "Upload failed: " +
+    JSON.stringify(e.error || e.message)
+  );
     }
-
-    setStatusMessage("Downloading file, please wait...");
-
-    try {
-      const response = await fetch(
-        "https://content.dropboxapi.com/2/files/download",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${TOKEN}`,
-            "Dropbox-API-Arg": JSON.stringify({
-              path: "/" + downloadFileName.trim(),
-            }),
-          },
-        }
-      );
-
-      if (response.ok) {
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = "downloaded_" + downloadFileName.trim();
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        setStatusMessage("Download successful: downloaded_" + downloadFileName.trim());
-      } else {
-        const errorData = await response.json();
-        setStatusMessage("Download failed: " + (errorData.error_summary || "File not found"));
-      }
-    } catch (error) {
-      setStatusMessage("Error: " + error.message);
-    }
-  };
-
-  return (
+  }
+  return(
     <div>
-      <h1>Dropbox File Upload & Download</h1>
-      <div>
-        <h2>1. Upload File</h2>
-        <input type="file" onChange={handleFileChange} />
-        <br />
-        <br />
-        <button onClick={handleUpload}>Upload</button>
-      </div>
-      <hr />
+      <input type="file" onChange={e=> setfile(e.target.files[0])}/>
+      <button onClick={upload}>Upload</button>
 
-      <div>
-        <h2>2. Download File</h2>
-        <input
-          type="text"
-          value={downloadFileName}
-          onChange={(e) => setDownloadFileName(e.target.value)}
-          placeholder="Enter Dropbox file name (e.g. test.txt)"
-        />
-        <button onClick={handleDownload}>Download</button>
-      </div>
-
-      <div>
-        <h3>Status Message</h3>
-        <p>{statusMessage || "Waiting for action..."}</p>
-      </div>
+      <p>{msg}</p>
     </div>
   );
 }
-
-export default App;

@@ -1,0 +1,307 @@
+Experiment 8 — Hadoop MapReduce Word Count
+1. Update Ubuntu and install Java
+sudo apt update
+sudo apt upgrade -y
+sudo apt install -y openjdk-11-jdk openssh-client openssh-server rsync wget nano
+java -version
+javac -version
+
+
+2. Configure SSH
+sudo systemctl enable --now ssh
+mkdir -p ~/.ssh
+ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
+cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+ssh localhost
+
+
+If asked to trust the host, type yes. Then run exit.
+3. Download and install Hadoop 3.3.6
+cd ~
+wget https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+tar -xzf hadoop-3.3.6.tar.gz
+sudo mv hadoop-3.3.6 /usr/local/hadoop
+sudo chown -R "$USER":"$USER" /usr/local/hadoop
+
+
+4. Set environment variables
+nano ~/.bashrc
+
+
+Paste at the bottom:
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export HADOOP_HOME=/usr/local/hadoop
+export HADOOP_INSTALL=$HADOOP_HOME
+export HADOOP_MAPRED_HOME=$HADOOP_HOME
+export HADOOP_COMMON_HOME=$HADOOP_HOME
+export HADOOP_HDFS_HOME=$HADOOP_HOME
+export YARN_HOME=$HADOOP_HOME
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+
+
+Save with Ctrl+O, Enter, then Ctrl+X.
+source ~/.bashrc
+hadoop version
+
+
+5. Configure Hadoop Java
+nano "$HADOOP_HOME/etc/hadoop/hadoop-env.sh"
+
+
+Set this line:
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+
+
+Save and exit.
+6. Configure core-site.xml
+nano "$HADOOP_HOME/etc/hadoop/core-site.xml"
+
+
+Replace its contents:
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://localhost:9000</value>
+    </property>
+</configuration>
+
+
+7. Configure hdfs-site.xml
+nano "$HADOOP_HOME/etc/hadoop/hdfs-site.xml"
+
+
+Replace its contents:
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>dfs.replication</name>
+        <value>1</value>
+    </property>
+    <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///usr/local/hadoop/data/hdfs/namenode</value>
+    </property>
+    <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///usr/local/hadoop/data/hdfs/datanode</value>
+    </property>
+</configuration>
+
+
+8. Configure mapred-site.xml
+nano "$HADOOP_HOME/etc/hadoop/mapred-site.xml"
+
+
+Replace its contents:
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+    </property>
+</configuration>
+
+
+9. Configure yarn-site.xml
+nano "$HADOOP_HOME/etc/hadoop/yarn-site.xml"
+
+
+Replace its contents:
+<?xml version="1.0"?>
+<configuration>
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+    </property>
+</configuration>
+
+
+Save each XML file using Ctrl+O, Enter, and Ctrl+X.
+10. Format HDFS
+mkdir -p /usr/local/hadoop/data/hdfs/namenode
+mkdir -p /usr/local/hadoop/data/hdfs/datanode
+
+# Run only for a fresh installation
+hdfs namenode -format
+
+
+Warning: Do not format again after storing data in HDFS.
+11. Start Hadoop services
+start-dfs.sh
+jps
+
+start-yarn.sh
+jps
+
+
+Expected processes include NameNode, DataNode, SecondaryNameNode, ResourceManager, and NodeManager.
+12. Create the input file
+mkdir -p ~/hadoop-lab
+cd ~/hadoop-lab
+
+cat > file.txt <<'EOF'
+Hello Hadoop
+Hello World
+Hadoop is powerful
+EOF
+
+cat file.txt
+
+
+13. Upload the file to HDFS
+hdfs dfs -mkdir -p /input
+hdfs dfs -put -f file.txt /input/
+hdfs dfs -ls /input
+hdfs dfs -cat /input/file.txt
+
+
+14. Execute MapReduce Word Count
+# Remove old output if it exists
+hdfs dfs -rm -r -f /output
+
+# Run Word Count
+hadoop jar "$HADOOP_HOME/share/hadoop/mapreduce/hadoop-mapreduce-examples-3.3.6.jar" wordcount /input /output
+
+
+15. Display the output
+hdfs dfs -cat /output/part-r-00000
+
+
+16. Stop Hadoop
+stop-yarn.sh
+stop-dfs.sh
+jps
+
+
+
+Experiment 9 — Apache Spark
+This section uses Spark 3.5.8 and Java 11.
+1. Install Python
+sudo apt install -y python3 python3-pip
+python3 --version
+java -version
+
+
+2. Download and install Spark
+cd ~
+wget https://archive.apache.org/dist/spark/spark-3.5.8/spark-3.5.8-bin-hadoop3.tgz
+tar -xzf spark-3.5.8-bin-hadoop3.tgz
+sudo mv spark-3.5.8-bin-hadoop3 /usr/local/spark
+sudo chown -R "$USER":"$USER" /usr/local/spark
+
+
+3. Configure Spark environment variables
+nano ~/.bashrc
+
+
+Add these lines at the bottom:
+export SPARK_HOME=/usr/local/spark
+export PATH=$PATH:$SPARK_HOME/bin
+
+
+Save and exit.
+source ~/.bashrc
+echo "$SPARK_HOME"
+spark-shell --version
+pyspark --version
+
+
+4. Start Scala Spark shell
+spark-shell --master 'local[2]'
+
+
+Enter the following commands inside the scala> prompt, one at a time.
+5. Create a sample text file
+import java.nio.file.{Files, Paths}
+
+Files.write(
+  Paths.get(System.getProperty("user.home") + "/input.txt"),
+  "Hello Spark\nHello Hadoop\nSpark is powerful".getBytes("UTF-8")
+)
+
+
+6. Read the file and count lines
+val lines = sc.textFile("file://" + System.getProperty("user.home") + "/input.txt")
+lines.count()
+
+
+Expected result: 3.
+7. Word Count using RDD
+val words = lines.flatMap(line => line.split("\\s+"))
+val counts = words.map(word => (word, 1)).reduceByKey(_ + _)
+counts.collect().foreach(println)
+
+
+8. Exit Scala Spark shell
+:quit
+
+
+9. Start PySpark
+Run in the normal Ubuntu terminal:
+pyspark --master 'local[2]'
+
+
+Enter these commands inside the >>> prompt.
+10. Word Count using Python
+rdd = sc.parallelize([    "Hello Spark",    "Hello Hadoop",    "Spark is powerful"])counts = (    rdd.flatMap(lambda line: line.split())       .map(lambda word: (word, 1))       .reduceByKey(lambda a, b: a + b))print(sorted(counts.collect()))
+
+
+
+Exit PySpark:
+exit()
+
+
+
+11. Create a CSV file
+Run in the normal Ubuntu terminal:
+cat > ~/students.csv <<'EOF'
+id,name,age
+1,Alice,22
+2,Bob,25
+EOF
+
+
+12. Load CSV into a DataFrame
+Start PySpark:
+pyspark --master 'local[2]'
+
+
+At the >>> prompt, enter:
+import osdf = spark.read.option("header", True).option(    "inferSchema", True).csv("file://" + os.path.expanduser("~/students.csv"))df.show()
+
+
+
+13. Display DataFrame schema
+df.printSchema()df.select("name", "age").show()
+
+
+
+Exit PySpark:
+exit()
+
+
+
+14. Optional: Read Hadoop HDFS data using Spark
+First, start HDFS in the normal terminal:
+start-dfs.sh
+hdfs dfs -ls /input
+
+
+Start PySpark:
+pyspark --master 'local[2]'
+
+
+At the >>> prompt:
+lines = sc.textFile("hdfs://localhost:9000/input/file.txt")print(lines.count())counts = (    lines.flatMap(lambda line: line.split())         .map(lambda word: (word, 1))         .reduceByKey(lambda a, b: a + b))print(sorted(counts.collect()))
+
+
+
+Exit PySpark and stop Hadoop:
+stop-yarn.sh
+stop-dfs.sh
+
+
+Remember: XML code must go inside its corresponding configuration file. Scala code belongs inside scala>, Python code inside >>>, and shell commands in the normal Ubuntu terminal.
